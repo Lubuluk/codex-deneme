@@ -2,7 +2,7 @@
 
 ## Trendyol Review Image Downloader
 
-This repository includes a Python script `download_trendyol_images.py` that can download user review images from Trendyol product pages. It uses Playwright with a stealth configuration to avoid detection.
+This repository includes a Python script `download_trendyol_images.py` that downloads user photo review images from Trendyol product pages. The script navigates with Playwright and activates the **Fotoğraflı Değerlendirme** filter before extracting the high‑resolution photo URLs from the page’s review state.
 
 ### Requirements
 - Python 3.9+

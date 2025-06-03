@@ -1,46 +1,11 @@
 import asyncio
 import os
-import re
 import requests
-from urllib.parse import urljoin
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 
 SAVE_DIR = "D:/Images"
 
-async def collect_image_urls(page):
-    image_urls = set()
-    # images in img tags
-    imgs = await page.query_selector_all("img")
-    for img in imgs:
-        for attr in ["src", "data-src", "data-srcset", "srcset"]:
-            val = await img.get_attribute(attr)
-            if not val:
-                continue
-            if attr.endswith("set"):
-                for part in val.split(','):
-                    url = part.strip().split(' ')[0]
-                    if url:
-                        if url.startswith('//'):
-                            url = 'https:' + url
-                        image_urls.add(url)
-            else:
-                url = val
-                if url.startswith('//'):
-                    url = 'https:' + url
-                image_urls.add(url)
-    # background-image styles
-    divs = await page.query_selector_all("[style*='background-image']")
-    for div in divs:
-        style = await div.get_attribute("style")
-        if style:
-            m = re.search(r"background-image\s*:\s*url\(['\"]?(.*?)['\"]?\)", style)
-            if m:
-                url = m.group(1)
-                if url.startswith('//'):
-                    url = 'https:' + url
-                image_urls.add(url)
-    return list(image_urls)
 
 async def fetch_review_images(url):
     async with async_playwright() as pw:
@@ -49,13 +14,15 @@ async def fetch_review_images(url):
         page = await context.new_page()
         await stealth_async(page)
         await page.goto(url, timeout=60000)
-        # click Fotoğraflı Değerlendirme tab if present
+
+        # activate photo reviews tab if available
         try:
             await page.get_by_text("Fotoğraflı Değerlendirme", exact=False).click()
             await page.wait_for_timeout(2000)
         except Exception:
             pass
-        # load more reviews
+
+        # click "Daha fazla g\xC3\xB6ster" buttons if present
         while True:
             try:
                 btn = page.get_by_text("Daha fazla göster", exact=False)
@@ -66,10 +33,23 @@ async def fetch_review_images(url):
                     break
             except Exception:
                 break
-        # ensure lazy images loaded
+
+        # scroll to bottom to trigger lazy loading
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         await page.wait_for_timeout(2000)
-        urls = await collect_image_urls(page)
+
+        # read image list from global state
+        state = await page.evaluate("window.__REVIEW_APP_INITIAL_STATE__")
+        urls = []
+        try:
+            imgs = state["ratingAndReviewResponse"]["ratingAndReview"]["imageSummary"]
+            for item in imgs:
+                url = item.get("mediaFile", {}).get("url")
+                if url:
+                    urls.append(url)
+        except Exception as e:
+            print(f"Failed to parse imageSummary: {e}")
+
         await browser.close()
     os.makedirs(SAVE_DIR, exist_ok=True)
     for i, img_url in enumerate(urls):
