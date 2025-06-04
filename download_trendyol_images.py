@@ -32,6 +32,7 @@ async def fetch_review_images(url: str) -> None:
 
         collected: Set[str] = set()
         for page_num in range(total_pages):
+            print(f"Fetching page {page_num + 1}/{total_pages}")
             params = {
                 "sellerId": seller_id,
                 "contentId": product_id,
@@ -40,11 +41,23 @@ async def fetch_review_images(url: str) -> None:
                 "orderBy": "Score",
                 "channelId": 1,
             }
+
             resp = await page.request.get(
                 "https://apigw.trendyol.com/discovery-web-websfxsocialreviewrating-santral/product-reviews-detailed",
                 params=params,
             )
-            data = await resp.json()
+            body = await resp.body()
+            if resp.status != 200:
+                print(
+                    f"Request for page {page_num + 1} returned status {resp.status}, length {len(body)}"
+                )
+            try:
+                data = await resp.json()
+            except Exception:
+                print(
+                    f"Failed to parse JSON (status={resp.status}, length={len(body)}) on page {page_num + 1}"
+                )
+                continue
 
             if page_num == 0:
                 imgs = data["result"].get("imageSummary", [])
@@ -62,6 +75,7 @@ async def fetch_review_images(url: str) -> None:
         await browser.close()
 
     os.makedirs(SAVE_DIR, exist_ok=True)
+    print(f"Attempting to download {len(collected)} images")
     for i, img_url in enumerate(sorted(collected)):
         try:
             resp = requests.get(img_url, headers={"User-Agent": "Mozilla/5.0"})
@@ -71,9 +85,10 @@ async def fetch_review_images(url: str) -> None:
             path = os.path.join(SAVE_DIR, f"image_{i}.{ext}")
             with open(path, "wb") as f:
                 f.write(resp.content)
-            print(f"Saved {path}")
+            print(f"Saved {path} ({i + 1}/{len(collected)})")
         except Exception as e:
             print(f"Failed {img_url}: {e}")
+    print("Download completed")
 
 if __name__ == "__main__":
     url = "https://www.trendyol.com/rissoli/rissoli-kadin-siyah-gold-yuzuk-detayli-gunluk-sandalet-p-927370327/yorumlar"

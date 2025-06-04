@@ -26,6 +26,7 @@ python download_trendyol_images.py
 ```
 
 The script saves images under `D:/Images` (on Windows). On Linux/macOS this path will be created as a directory literally named `D:` with a subfolder `Images`.
+If any review API call fails or returns invalid JSON, the script skips that page and continues so a single bad response doesn't stop the entire download.
 
 ### Building a Windows Executable
 You can turn the script into a standalone `.exe` using PyInstaller:
