@@ -52,7 +52,9 @@ async def fetch_review_images(url: str) -> None:
         except Exception:
             pass
 
-        for _ in range(20):
+        prev_count = 0
+        stagnant = 0
+        for _ in range(50):
             btn = page.locator("text=Daha fazla g\xF6ster")
             if await btn.count() > 0:
                 try:
@@ -62,7 +64,21 @@ async def fetch_review_images(url: str) -> None:
                     pass
             await page.mouse.wheel(0, 2000)
             await page.wait_for_timeout(1000)
-            if await btn.count() == 0:
+
+            try:
+                state = await page.evaluate("window.__REVIEW_APP_INITIAL_STATE__")
+                rating = state.get("ratingAndReviewResponse", {}).get("ratingAndReview", {})
+                _extract_from_result(rating, collected)
+            except Exception:
+                pass
+
+            if len(collected) == prev_count:
+                stagnant += 1
+            else:
+                prev_count = len(collected)
+                stagnant = 0
+
+            if await btn.count() == 0 and stagnant >= 3:
                 break
 
         await page.wait_for_timeout(3000)
