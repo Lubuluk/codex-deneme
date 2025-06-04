@@ -52,18 +52,31 @@ async def fetch_review_images(url: str) -> None:
         except Exception:
             pass
 
+        # Open the modal showing all photo reviews
+        try:
+            await page.get_by_text("Tümü", exact=False).click()
+            await page.wait_for_timeout(1500)
+        except Exception:
+            pass
+
+        modal = page.locator('div[role="dialog"] div[style*="overflow"]')
+
         prev_count = 0
         stagnant = 0
-        for _ in range(50):
-            btn = page.locator("text=Daha fazla g\xF6ster")
+        for _ in range(200):
+            btn = modal.locator("text=Daha fazla g\xF6ster")
             if await btn.count() > 0:
                 try:
                     await btn.first.click()
                     await page.wait_for_timeout(1500)
                 except Exception:
                     pass
-            await page.mouse.wheel(0, 2000)
-            await page.wait_for_timeout(1000)
+
+            try:
+                await modal.evaluate('(el) => el.scrollBy(0, el.scrollHeight)')
+            except Exception:
+                await page.mouse.wheel(0, 2000)
+            await page.wait_for_timeout(800)
 
             try:
                 state = await page.evaluate("window.__REVIEW_APP_INITIAL_STATE__")
