@@ -2,7 +2,7 @@
 
 ## Trendyol Review Image Downloader
 
-This repository includes a Python script `download_trendyol_images.py` that downloads user photo review images from Trendyol product pages. The scraper opens the page with Playwright, enables the **Fotoğraflı Değerlendirme** filter and then queries Trendyol's review API page by page to collect every high‑resolution image URL.
+This repository includes a Python script `download_trendyol_images.py` that downloads user photo review images from Trendyol product pages. The scraper opens the page with Playwright, enables the **Fotoğraflı Değerlendirme** filter and then scrolls through the reviews section. It listens for the page's own review API requests and parses their JSON payloads so every high‑resolution photo is saved without performing direct blocked requests.
 
 ### Requirements
 - Python 3.9+
@@ -26,7 +26,7 @@ python download_trendyol_images.py
 ```
 
 The script saves images under `D:/Images` (on Windows). On Linux/macOS this path will be created as a directory literally named `D:` with a subfolder `Images`.
-If any review API call fails or returns invalid JSON, the script skips that page and continues so a single bad response doesn't stop the entire download.
+If a network call fails or returns invalid JSON, the script ignores it so one bad response doesn't stop the entire download.
 
 ### Building a Windows Executable
 You can turn the script into a standalone `.exe` using PyInstaller:

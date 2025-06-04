@@ -3,74 +3,75 @@ import os
 from typing import Set
 
 import requests
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, Page
 from playwright_stealth import stealth_async
 
 SAVE_DIR = "D:/Images"
 
 
+def _extract_from_result(result: dict, collected: Set[str]) -> None:
+    for item in result.get("imageSummary", []):
+        url = item.get("mediaFile", {}).get("url")
+        if url:
+            collected.add(url)
+    for review in result.get("productReviews", {}).get("content", []):
+        for media in review.get("mediaFiles", []):
+            url = media.get("url")
+            if url:
+                collected.add(url)
+
+
 async def fetch_review_images(url: str) -> None:
+    collected: Set[str] = set()
+
+    async def handle_response(resp):
+        if "product-reviews" not in resp.url:
+            return
+        if resp.status != 200:
+            print(f"Response {resp.url} -> {resp.status}")
+            return
+        try:
+            data = await resp.json()
+        except Exception:
+            print(f"Failed to parse JSON from {resp.url}")
+            return
+        _extract_from_result(data.get("result", {}), collected)
+
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True, args=["--ignore-certificate-errors"])
         context = await browser.new_context(ignore_https_errors=True)
-        page = await context.new_page()
+        page: Page = await context.new_page()
         await stealth_async(page)
+        page.on("response", handle_response)
+
         await page.goto(url, timeout=60000)
 
-        # enable photo-only reviews
         try:
             await page.get_by_text("Fotoğraflı Değerlendirme", exact=False).click()
             await page.wait_for_timeout(2000)
         except Exception:
             pass
 
-        state = await page.evaluate("window.__REVIEW_APP_INITIAL_STATE__")
-        rating = state["ratingAndReviewResponse"]["ratingAndReview"]
-        total_pages = rating["productReviews"]["totalPages"]
-        product_id = rating["product"]["id"]
-        seller_id = rating["product"]["merchant"]["id"]
+        for _ in range(20):
+            btn = page.locator("text=Daha fazla g\xF6ster")
+            if await btn.count() > 0:
+                try:
+                    await btn.first.click()
+                    await page.wait_for_timeout(1500)
+                except Exception:
+                    pass
+            await page.mouse.wheel(0, 2000)
+            await page.wait_for_timeout(1000)
+            if await btn.count() == 0:
+                break
 
-        collected: Set[str] = set()
-        for page_num in range(total_pages):
-            print(f"Fetching page {page_num + 1}/{total_pages}")
-            params = {
-                "sellerId": seller_id,
-                "contentId": product_id,
-                "page": page_num,
-                "order": "DESC",
-                "orderBy": "Score",
-                "channelId": 1,
-            }
-
-            resp = await page.request.get(
-                "https://apigw.trendyol.com/discovery-web-websfxsocialreviewrating-santral/product-reviews-detailed",
-                params=params,
-            )
-            body = await resp.body()
-            if resp.status != 200:
-                print(
-                    f"Request for page {page_num + 1} returned status {resp.status}, length {len(body)}"
-                )
-            try:
-                data = await resp.json()
-            except Exception:
-                print(
-                    f"Failed to parse JSON (status={resp.status}, length={len(body)}) on page {page_num + 1}"
-                )
-                continue
-
-            if page_num == 0:
-                imgs = data["result"].get("imageSummary", [])
-                for item in imgs:
-                    url = item.get("mediaFile", {}).get("url")
-                    if url:
-                        collected.add(url)
-
-            for review in data["result"]["productReviews"].get("content", []):
-                for media in review.get("mediaFiles", []):
-                    url = media.get("url")
-                    if url:
-                        collected.add(url)
+        await page.wait_for_timeout(3000)
+        try:
+            state = await page.evaluate("window.__REVIEW_APP_INITIAL_STATE__")
+            rating = state.get("ratingAndReviewResponse", {}).get("ratingAndReview", {})
+            _extract_from_result(rating, collected)
+        except Exception:
+            pass
 
         await browser.close()
 
@@ -89,6 +90,7 @@ async def fetch_review_images(url: str) -> None:
         except Exception as e:
             print(f"Failed {img_url}: {e}")
     print("Download completed")
+
 
 if __name__ == "__main__":
     url = "https://www.trendyol.com/rissoli/rissoli-kadin-siyah-gold-yuzuk-detayli-gunluk-sandalet-p-927370327/yorumlar"
